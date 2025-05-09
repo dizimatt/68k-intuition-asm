@@ -41,26 +41,6 @@ start:
         beq     close_intuition         ; If zero (failed), close intuition and exit
         move.l  d0,window_pointer
         
-        ; Create close button gadget
-        move.l  window_pointer,a0
-        move.w  nw_Width(a0),d0
-        sub.w   #BUTTON_WIDTH,d0
-        lsr.w   #1,d0                   ; Center X: (window_width - button_width)/2
-        move.w  nw_Height(a0),d1
-        sub.w   #BUTTON_HEIGHT,d1
-        lsr.w   #1,d1                   ; Center Y: (window_height - button_height)/2
-        
-        ; Set up the gadget structure
-        lea     close_button,a0
-        move.w  d0,gg_LeftEdge(a0)      ; X position
-        move.w  d1,gg_TopEdge(a0)       ; Y position
-        
-        ; Add gadget to window
-        move.l  intuition_base,a6
-        move.l  window_pointer,a0
-        lea     close_button,a1
-        jsr     _LVOAddGadget(a6)
-
         ; Main event loop
 event_loop:
         ; Wait for an event (more efficient than continuous polling)
@@ -123,7 +103,7 @@ new_window:
         dc.b    1,3                     ; DetailPen, BlockPen
         dc.l    IDCMP_CLOSEWINDOW|IDCMP_GADGETUP ; IDCMPFlags
         dc.l    WFLG_CLOSEGADGET|WFLG_DRAGBAR|WFLG_DEPTHGADGET|WFLG_ACTIVATE|WFLG_SIZEGADGET|WFLG_REFRESHBITS ; Flags
-        dc.l    0                       ; FirstGadget (will be added later)
+        dc.l    close_button                       ; FirstGadget (will be added later)
         dc.l    0                       ; CheckMark
         dc.l    windowname              ; Title
         dc.l    0                       ; Screen
@@ -138,10 +118,13 @@ new_window:
 windowname:   dc.b   'Our Window',0
         even
 
+windowtitle2:   dc.b   'Our Upated Window',0
+        even
+
 close_button:
         dc.l    0                       ; NextGadget
-        dc.w    0                       ; LeftEdge (will be set)
-        dc.w    0                       ; TopEdge (will be set)
+        dc.w    10                       ; LeftEdge (will be set)
+        dc.w    10                       ; TopEdge (will be set)
         dc.w    BUTTON_WIDTH            ; Width
         dc.w    BUTTON_HEIGHT           ; Height
         dc.w    GADGHCOMP               ; Flags (complementary highlighting)
