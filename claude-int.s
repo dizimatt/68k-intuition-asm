@@ -29,17 +29,34 @@ start:
         lea     intuition_name,a1       ; Name of intuition library
         moveq   #0,d0
         jsr     _LVOOpenLibrary(a6)
-        tst.l   d0                     ; Test if library opened successfully
-        beq     exit_program           ; If zero (failed), exit
+        tst.l   d0                      ; Test if library opened successfully
+        beq     exit_program            ; If zero (failed), exit
         move.l  d0,intuition_base
 
-        ; Open window
+        ; Pre-position the button in the center of the window
+        lea     close_button,a6
+        move.w  #(WINDOW_WIDTH-BUTTON_WIDTH)/2,gg_LeftEdge(a6)
+        move.w  #(WINDOW_HEIGHT-BUTTON_HEIGHT)/2,gg_TopEdge(a6)
+
+        ; Open window with pre-configured gadget
         move.l  intuition_base,a6
         lea     new_window,a0
         jsr     _LVOOpenWindow(a6)
-        tst.l   d0                     ; Test if window opened successfully
+        tst.l   d0                      ; Test if window opened successfully
         beq     close_intuition         ; If zero (failed), close intuition and exit
         move.l  d0,window_pointer
+
+        lea     sample_text,a0
+        move.b  #2,(a0)                 ; chanegd the background colour at creationtime
+
+        move.l  intuition_base,a6       ; Intuition base in a6
+        move.l  window_pointer,a0       ; Window pointer in a0
+        move.l  wd_RPort(a0),a0         ; Get RastPort from window
+        lea     sample_text,a1          ; Address of IntuiText structure
+        moveq   #40,d0                  ; X position
+        moveq   #60,d1                  ; Y position
+        jsr     _LVOPrintIText(a6)      ; Print the text
+
         
         ; Main event loop
 event_loop:
@@ -69,10 +86,16 @@ event_loop:
         beq     close_window
         
         cmp.l   #IDCMP_GADGETUP,d6      ; Gadget up?
-        beq     close_window
+        beq     handle_button_click
                 
         ; Otherwise loop back
         bra     event_loop
+
+; Handle when our button is clicked
+handle_button_click:
+        ; We could do different things here based on which button was clicked
+        ; For now, just close the window like the close gadget does
+        bra     close_window
 
 close_window:
         ; Close the window
@@ -99,11 +122,11 @@ new_window:
         dc.w    WINDOW_LEFT             ; LeftEdge
         dc.w    WINDOW_TOP              ; TopEdge
         dc.w    WINDOW_WIDTH            ; Width
-        dc.w    WINDOW_HEIGHT           ; Height
+        dc.w    WINDOW_HEIGHT+50           ; Height
         dc.b    1,3                     ; DetailPen, BlockPen
         dc.l    IDCMP_CLOSEWINDOW|IDCMP_GADGETUP ; IDCMPFlags
         dc.l    WFLG_CLOSEGADGET|WFLG_DRAGBAR|WFLG_DEPTHGADGET|WFLG_ACTIVATE|WFLG_SIZEGADGET|WFLG_REFRESHBITS ; Flags
-        dc.l    close_button                       ; FirstGadget (will be added later)
+        dc.l    close_button            ; FirstGadget (pre-configured)
         dc.l    0                       ; CheckMark
         dc.l    windowname              ; Title
         dc.l    0                       ; Screen
@@ -114,17 +137,15 @@ new_window:
         dc.w    WINDOW_HEIGHT*2         ; MaxHeight
         dc.w    WBENCHSCREEN            ; Type
 
-;and here comes the window name:
+; Window name
 windowname:   dc.b   'Our Window',0
         even
 
-windowtitle2:   dc.b   'Our Upated Window',0
-        even
-
+; Button gadget structure
 close_button:
         dc.l    0                       ; NextGadget
-        dc.w    10                       ; LeftEdge (will be set)
-        dc.w    10                       ; TopEdge (will be set)
+        dc.w    0                       ; LeftEdge (will be set programmatically)
+        dc.w    0                       ; TopEdge (will be set programmatically)
         dc.w    BUTTON_WIDTH            ; Width
         dc.w    BUTTON_HEIGHT           ; Height
         dc.w    GADGHCOMP               ; Flags (complementary highlighting)
@@ -138,19 +159,41 @@ close_button:
         dc.w    1                       ; GadgetID
         dc.l    0                       ; UserData
 
+sample_text:
+        dc.b    1                       ; FrontPen - Text color (1=white)
+        dc.b    0                       ; BackPen - Background color (0=background)
+        dc.b    0                       ; DrawMode - JAM1 mode (0)
+        dc.b    0                       ; Padding for alignment
+        dc.w    0                       ; LeftEdge - relative to output position
+        dc.w    0                       ; TopEdge - relative to output position
+        dc.l    0                       ; ITextFont - NULL for default font
+        dc.l    text_string             ; IText - pointer to actual text
+        dc.l    sample_text2            ; NextText - NULL (no more text)
+
+text_string:        dc.b    "Hello from Intuition!",0
+
+sample_text2:
+        dc.b    1                       ; FrontPen - Text color (1=white)
+        dc.b    0                       ; BackPen - Background color (0=background)
+        dc.b    0                       ; DrawMode - JAM1 mode (0)
+        dc.b    0                       ; Padding for alignment
+        dc.w    40                      ; LeftEdge - relative to output position
+        dc.w    100                      ; TopEdge - relative to output position
+        dc.l    0                       ; ITextFont - NULL for default font
+        dc.l    text_string2            ; IText - pointer to actual text
+        dc.l    0                       ; NextText - NULL (no more text)
+
+text_string2:        dc.b    "second hello!",0
 ; ******************************************************
 ; Data Section
 ; ******************************************************
 
 intuition_name:     dc.b    "intuition.library",0
                     even
-graphics_name:      dc.b    "graphics.library",0
-                    even
 button_text:        dc.b    "Close Window",0
                     even
 
 intuition_base:     dc.l    0
-graphics_base:      dc.l    0
 window_pointer:     dc.l    0
 
         END
