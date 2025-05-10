@@ -46,16 +46,9 @@ start:
         beq     close_intuition         ; If zero (failed), close intuition and exit
         move.l  d0,window_pointer
 
-        lea     sample_text,a0
-        move.b  #2,(a0)                 ; chanegd the background colour at creationtime
-
-        move.l  intuition_base,a6       ; Intuition base in a6
-        move.l  window_pointer,a0       ; Window pointer in a0
-        move.l  wd_RPort(a0),a0         ; Get RastPort from window
-        lea     sample_text,a1          ; Address of IntuiText structure
-        moveq   #40,d0                  ; X position
-        moveq   #60,d1                  ; Y position
-        jsr     _LVOPrintIText(a6)      ; Print the text
+        bsr     add_text_items
+;        bsr     add_new_gadget
+        bsr     draw_image
 
         
         ; Main event loop
@@ -91,6 +84,49 @@ event_loop:
         ; Otherwise loop back
         bra     event_loop
 
+draw_image:
+
+        move.l  intuition_base,a6       ; Intuition base in a6
+        move.l  window_pointer,a0       ; Window pointer in a0
+        move.l  wd_RPort(a0),a0         ; Get RastPort from window
+        lea     window_image,a1
+
+        moveq   #10,d0
+        moveq   #10,d1
+        jsr     _LVODrawImage(a6)      ; Draw the image
+        
+        rts
+
+add_text_items:
+        lea     sample_text,a0
+        move.b  #2,(a0)                 ; chanegd the background colour at creationtime
+
+        move.l  intuition_base,a6       ; Intuition base in a6
+        move.l  window_pointer,a0       ; Window pointer in a0
+        move.l  wd_RPort(a0),a0         ; Get RastPort from window
+        lea     sample_text,a1          ; Address of IntuiText structure
+        moveq   #40,d0                  ; X position
+        moveq   #60,d1                  ; Y position
+        jsr     _LVOPrintIText(a6)      ; Print the text
+        rts
+
+
+add_new_gadget:
+        ; Prepare to add gadget to window
+        move.l  intuition_base,a6      ; Intuition library base
+        move.l  window_pointer,a0      ; Window pointer 
+        lea     close_button,a1           ; Gadget structure
+        moveq   #0,d0                  ; Position (0 = add at the end)
+        jsr     _LVOAddGadget(a6)
+        
+        ; d0 now contains the position where the gadget was added
+        ; Optionally store this position if needed
+
+        move.l  intuition_base,a6      ; Intuition library base
+        move.l  window_pointer,a0      ; Window pointer 
+        jsr _LVORefreshWindowFrame(a6)
+        rts
+
 ; Handle when our button is clicked
 handle_button_click:
         ; We could do different things here based on which button was clicked
@@ -118,6 +154,34 @@ exit_program:
 ; Structures
 ; ******************************************************
 
+window_image:
+        dc.w    0,0                     ; LeftEdge, TopEdge (relative to drawing position)
+        dc.w    16,8                    ; Width, Height in pixels
+        dc.w    1                       ; Depth (1 bitplane = 2 colors)
+        dc.l    window_image_data       ; Pointer to image data
+        dc.b    1,0                     ; PlanePick, PlaneOnOff
+        dc.l    0                       ; NextImage
+
+; Image data - 16x8 pixels (2 bytes per row, 8 rows)
+window_image_data:
+        dc.w    %0111111111111110       ; Row 1
+        dc.w    %1000000000000001       ; Row 2
+        dc.w    %1000000000000001       ; Row 3
+        dc.w    %1000111111000001       ; Row 4
+        dc.w    %1000111111000001       ; Row 5
+        dc.w    %1000000000000001       ; Row 6
+        dc.w    %1000000000000001       ; Row 7
+        dc.w    %0111111111111110       ; Row 8
+
+        dc.w    %1111111111111111       ; Row 1
+        dc.w    %1000000000000001       ; Row 2
+        dc.w    %1000000000000001       ; Row 3
+        dc.w    %1000111111000001       ; Row 4
+        dc.w    %1000111111000001       ; Row 5
+        dc.w    %1000000000000001       ; Row 6
+        dc.w    %1000000000000001       ; Row 7
+        dc.w    %1111111111111111       ; Row 8
+
 new_window:
         dc.w    WINDOW_LEFT             ; LeftEdge
         dc.w    WINDOW_TOP              ; TopEdge
@@ -126,7 +190,8 @@ new_window:
         dc.b    1,3                     ; DetailPen, BlockPen
         dc.l    IDCMP_CLOSEWINDOW|IDCMP_GADGETUP ; IDCMPFlags
         dc.l    WFLG_CLOSEGADGET|WFLG_DRAGBAR|WFLG_DEPTHGADGET|WFLG_ACTIVATE|WFLG_SIZEGADGET|WFLG_REFRESHBITS ; Flags
-        dc.l    close_button            ; FirstGadget (pre-configured)
+;        dc.l    close_button            ; FirstGadget (pre-configured)
+        dc.l    0                       ; Was FirstGadget (pre-configured)
         dc.l    0                       ; CheckMark
         dc.l    windowname              ; Title
         dc.l    0                       ; Screen
@@ -144,20 +209,30 @@ windowname:   dc.b   'Our Window',0
 ; Button gadget structure
 close_button:
         dc.l    0                       ; NextGadget
-        dc.w    0                       ; LeftEdge (will be set programmatically)
-        dc.w    0                       ; TopEdge (will be set programmatically)
-        dc.w    BUTTON_WIDTH            ; Width
-        dc.w    BUTTON_HEIGHT           ; Height
+        dc.w    0,0                     ; LeftEdge, TopEdge (will be set)
+        dc.w    100,20                  ; Width, Height
         dc.w    GADGHCOMP               ; Flags (complementary highlighting)
-        dc.w    RELVERIFY|GADGIMMEDIATE ; Activation (verify when releasing mouse button)
-        dc.w    BOOLGADGET              ; GadgetType (BOOLGADGET)
+        dc.w    RELVERIFY|GADGIMMEDIATE ; Activation flags
+        dc.w    BOOLGADGET              ; GadgetType (Boolean)
         dc.l    0                       ; GadgetRender
         dc.l    0                       ; SelectRender
         dc.l    button_text             ; GadgetText
         dc.l    0                       ; MutualExclude
         dc.l    0                       ; SpecialInfo
-        dc.w    1                       ; GadgetID
+        dc.w    2                       ; GadgetID (unique ID for this gadget)
         dc.l    0                       ; UserData
+button_text:
+        dc.b    1                       ; FrontPen - Text color (1=white)
+        dc.b    0                       ; BackPen - Background color (0=background)
+        dc.b    0                       ; DrawMode - JAM1 mode (0)
+        dc.b    0                       ; Padding for alignment
+        dc.w    0                      ; LeftEdge - relative to output position
+        dc.w    0                      ; TopEdge - relative to output position
+        dc.l    0                       ; ITextFont - NULL for default font
+        dc.l    button_text_string            ; IText - pointer to actual text
+        dc.l    0                       ; NextText - NULL (no more text)
+button_text_string:        dc.b    "Click ME!",0
+        even
 
 sample_text:
         dc.b    1                       ; FrontPen - Text color (1=white)
@@ -168,9 +243,9 @@ sample_text:
         dc.w    0                       ; TopEdge - relative to output position
         dc.l    0                       ; ITextFont - NULL for default font
         dc.l    text_string             ; IText - pointer to actual text
-        dc.l    sample_text2            ; NextText - NULL (no more text)
-
+        dc.l    sample_text2            ; NextText
 text_string:        dc.b    "Hello from Intuition!",0
+        even
 
 sample_text2:
         dc.b    1                       ; FrontPen - Text color (1=white)
@@ -182,15 +257,14 @@ sample_text2:
         dc.l    0                       ; ITextFont - NULL for default font
         dc.l    text_string2            ; IText - pointer to actual text
         dc.l    0                       ; NextText - NULL (no more text)
-
 text_string2:        dc.b    "second hello!",0
+        even
+
 ; ******************************************************
 ; Data Section
 ; ******************************************************
 
 intuition_name:     dc.b    "intuition.library",0
-                    even
-button_text:        dc.b    "Close Window",0
                     even
 
 intuition_base:     dc.l    0
